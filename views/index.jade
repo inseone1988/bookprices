@@ -1,5 +1,170 @@
 extends layout
 
 block content
-  h1= title
-  p Welcome to #{title}
+    div.container
+        div.row.h-50
+            div.col
+                h1 La casa de la copia
+        div.row.bg-light
+            div.col-md-4
+                h3 Generar lista de precios
+                form#data(action="/generate")
+                    div.mb-3
+                        label.form-label(for="pc") Precio copia
+                        input.form-control#pc(type="text" name="pc")
+                    div.mb-3
+                        label.form-label(for="pe") Precio engargolado
+                        input.form-control#pe(type="text" name="pe")
+                    button.btn.btn-info(type="submit") Generar
+            div.col-md-4
+                h4 Descarga
+                div.list-group#download
+        div.row.mt-3
+            div.col
+                h2 Edicion de libros
+        div.row
+            div.col-md-8
+                div.row
+                    div.col-md-4
+                        select#cs.form-select(name="career")
+                            option(selected disabled) Selecciona carrera
+                    div.col-md-4
+                        select#qs.form-select(name="career")
+                            option(selected disabled) Selecciona cuatri
+                    div.col-md-4
+                        button.btn.btn-danger#prefill(type="submit") Editar paquete
+                div.row.bg-light.mt-2
+                    div.col
+                        table.table.table-sm.table-bordered
+                            thead
+                                tr
+                                    th Titulo
+                                    th Autor
+                                    th Edicion
+                                    th Editorial
+                                    th Impresiones
+                            tbody#bookinfo
+            div.col-md-4.bg-light
+                h5 Edicion
+                div.row
+                        div.col-12.mb-3
+                            label.form-label Titulo
+                            input.form-control#BOOK_NAME(name="BOOK_NAME")
+                        div.col-12.mb-3
+                            label.form-label Autor
+                            input.form-control#BOOK_AUTHOR(name="BOOK_AUTHOR")
+                        div.col-4.mb-3
+                            label.form-label Edicion
+                            input.form-control#EDITION(name="EDITION")
+                        div.col-4.mb-3
+                            label.form-label Editorial
+                            input.form-control#BOOK_PUBLISHER(name="BOOK_PUBLISHER")
+                        div.col-4.mb-3
+                            label.form-label Copias
+                            input.form-control#COPIES(name="COPIES")
+                        div.form-check
+                            input.form-check-input(type="checkbox")
+                            label.form-check-label(onchange="disableBook()") Activo
+                        button.btn.btn-info#saveBook(type="button") Actualizar Libro
+block scripts
+    script.
+        var editing;
+        function generateQuarters(){
+            let s = $("#qs");
+            for (let i = 1; i < 11; i++) {
+                let o = $(document.createElement("option")).attr("value",i).text(i);
+                s.append(o);
+            }
+        }
+
+        function displayCareers(){
+            $.get("/careers",function(r){
+                if(r.payload.length){
+                    let s = $("#cs");
+                    for (let i = 0; i < r.payload.length; i++){
+                        let c = r.payload[i];
+                        let o = $(document.createElement("option")).attr("value",c.CAREER_NAME).text(c.CAREER_NAME);
+                        s.append(o);
+                    }
+                }
+            })
+        }
+        $(document).ready(function(){
+            generateQuarters();
+            displayCareers();
+        })
+
+        $("#data").submit(function (e) {
+            e.preventDefault();
+            let d = $("#data").serializeArray();
+            let vasl = {};
+            $.map(d, function (v, i) {
+                vasl[v.name] = v.value;
+            })
+            if (vasl.pc !== "" && vasl.pe !== "") {
+                $.get(`/generate?pc=${vasl.pc}&pe=${vasl.pe}`, function (data) {
+                    console.log(data);
+                    let link = encodeURI(data.payload.path.replace("./public", ""));
+                    let a = $(document.createElement("a")).addClass("list-group-item list-group-item-action active").attr("href", link).text("Descarga lista");
+                    $("#download").empty().append(a);
+                });
+            }
+        })
+
+        function fillTable(payload) {
+            let t = $("#bookinfo");
+            t.empty();
+            for (const book of payload) {
+                let columns = ["BOOK_NAME","BOOK_AUTHOR","EDITION","BOOK_PUBLISHER","COPIES"];
+                let row = $(document.createElement("tr")).click(function(){
+                    for (const column of columns) {
+                        let f = $(`#${column}`);
+                        f.change(function(){
+                            editing[column] = $(this).val();
+                            console.log(editing);
+                        });
+                        f.val(book[column])
+                    }
+                    editing = book;
+                });
+                book.ACTUALIZED?row.addClass("bg-success text-white") : row.addClass("bg-danger text-white");
+                for (const column of columns) {
+                    let col = $(document.createElement("td")).text(book[column]);
+                    row.append(col);
+                }
+                t.append(row);
+            }
+        }
+        $("#prefill").click(function (e) {
+            let c = $("#cs").val();
+            let q = $("#qs").val();
+            $.get(`/bookpackages?c=${c}&q=${q}`,function(r){
+                fillTable(r.payload);
+            });
+        })
+
+        $("#saveBook").click(function(){
+            $(this).attr("disabled",true);
+            $.ajax({
+                url: `/bookpackages`,
+                type : "POST",
+                data : editing,
+                dataType : "json",
+                success : function(r) {
+                    if (r.success){
+                        Swal.fire({
+                            title:"Exito",
+                            icon:"success",
+
+                        }).then((result)=>{
+                            window.location.reload();
+                        })
+                    }
+                    console.log(r);
+                }
+            })
+        })
+
+        function disableBook(){
+            editing["ACTUALIZED"] = false;
+        }
